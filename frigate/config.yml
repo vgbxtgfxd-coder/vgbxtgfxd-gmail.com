@@ -36,24 +36,24 @@ cameras:
         - person
       filters:
         person:
-          min_area: 2000
+          min_area: 1000
           max_area: 100000
-          min_score: 0.65
-          threshold: 0.75
-          min_ratio: 0.2
-          max_ratio: 1.0
+          min_score: 0.45
+          threshold: 0.6
+          min_ratio: 0.1
+          max_ratio: 2.5
     record:
       enabled: true
       alerts:
         retain:
           days: 1
         pre_capture: 13
-        post_capture: 12
+        post_capture: 15
       detections:
         retain:
           days: 1
         pre_capture: 13
-        post_capture: 12
+        post_capture: 15
     snapshots:
       enabled: true
       bounding_box: true
@@ -68,11 +68,11 @@ record:
     retain:
       days: 1
     pre_capture: 13
-    post_capture: 12
+    post_capture: 15
   detections:
     retain:
       days: 1
     pre_capture: 13
-    post_capture: 12
+    post_capture: 15
 
 version: 0.17

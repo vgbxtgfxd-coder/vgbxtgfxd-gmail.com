@@ -40,7 +40,7 @@ def check():
             save_sent(sent)
             continue
         score=ev.get('top_score') or ev.get('data',{}).get('top_score') or 1
-        if score < 0.75:
+        if score < 0.6:
             sent.add(eid)
             save_sent(sent)
             continue
