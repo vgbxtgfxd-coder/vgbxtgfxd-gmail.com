@@ -1,0 +1,78 @@
+mqtt:
+  enabled: false
+
+detectors:
+  cpu1:
+    type: cpu
+    num_threads: 4
+
+ffmpeg:
+  hwaccel_args: preset-vaapi
+
+cameras:
+  front:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://admin:Padsxy29zt@192.168.0.113:554/cam/realmonitor?channel=1&subtype=0
+          roles:
+            - detect
+            - record
+      output_args:
+        record: -f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c:v copy -an
+    detect:
+      enabled: true
+      width: 352
+      height: 288
+      fps: 4
+    motion:
+      threshold: 30
+      contour_area: 150
+      improve_contrast: true
+      lightning_threshold: 0.8
+      frame_alpha: 0.01
+    objects:
+      track:
+        - person
+      filters:
+        person:
+          min_area: 2000
+          max_area: 100000
+          min_score: 0.65
+          threshold: 0.75
+          min_ratio: 0.2
+          max_ratio: 1.0
+    record:
+      enabled: true
+      alerts:
+        retain:
+          days: 1
+        pre_capture: 13
+        post_capture: 12
+      detections:
+        retain:
+          days: 1
+        pre_capture: 13
+        post_capture: 12
+    snapshots:
+      enabled: true
+      bounding_box: true
+      crop: false
+      quality: 90
+      retain:
+        default: 1
+
+record:
+  enabled: true
+  alerts:
+    retain:
+      days: 1
+    pre_capture: 13
+    post_capture: 12
+  detections:
+    retain:
+      days: 1
+    pre_capture: 13
+    post_capture: 12
+
+version: 0.17
