@@ -1,0 +1,29 @@
+[project]
+name = "form-crawler"
+version = "1.0.0"
+description = "Production-ready parser for discovering company websites and extracting contact/callback form structures"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.9.0",
+    "aiosqlite>=0.19.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.1.0",
+    "selectolax>=0.3.21",
+    "pandas>=2.1.0",
+    "openpyxl>=3.1.0",
+    "playwright>=1.40.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"

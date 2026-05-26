@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  crawler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: form_crawler
+    volumes:
+      - ./data:/app/data
+      - ./config/proxies.txt:/app/config/proxies.txt:ro
+    environment:
+      - CRAWLER_MAX_CONCURRENT=5
+      - CRAWLER_HEADLESS=true
+      - CRAWLER_LOG_LEVEL=INFO
+      - CRAWLER_EXPORT_FORMAT=all
+    # Override CMD for actual run:
+    # docker compose run crawler --categories "застройщики" "клиники" --city "Москва"
+    command: ["--help"]
+    shm_size: "2gb"
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+          cpus: "2.0"
