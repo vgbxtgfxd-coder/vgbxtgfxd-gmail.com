@@ -29,6 +29,11 @@ def check():
         if not ev.get('has_clip'):continue
         if ev.get('end_time') is None:continue
         if time.time()-(ev.get('end_time',0) or 0) < 10:continue
+        # Skip events older than 1 hour (prevent resending old alerts)
+        if time.time()-(ev.get('start_time',0) or 0) > 3600:
+            sent.add(eid)
+            save_sent(sent)
+            continue
         duration=(ev.get('end_time',0) or 0)-(ev.get('start_time',0) or 0)
         if duration < 3:
             sent.add(eid)
