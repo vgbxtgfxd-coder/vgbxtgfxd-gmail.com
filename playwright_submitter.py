@@ -154,6 +154,9 @@ async def submit_via_browser(page_url: str, phone: str, name_val: str) -> dict:
                 await browser.close()
                 return result
 
+            # сбрасываем перехваченные до submit — нам нужны только POST после нажатия
+            intercepted.clear()
+
             # ── нажимаем submit ────────────────────────────────────────────────
             submitted = False
             for selector in [
@@ -187,22 +190,41 @@ async def submit_via_browser(page_url: str, phone: str, name_val: str) -> dict:
             await page.wait_for_timeout(3000)
 
             # ── анализируем перехваченные запросы ─────────────────────────────
-            # фильтруем — убираем страницу саму по себе, берём API-запросы
+            # домены аналитики и трекинга — игнорируем
+            NOISE_DOMAINS = {
+                "mc.yandex.ru", "yandex.ru", "google.com", "google-analytics.com",
+                "googletagmanager.com", "doubleclick.net", "facebook.com",
+                "vk.com", "top-fwz1.mail.ru", "counter.yadro.ru",
+                "pixel.facebook.com", "analytics", "metrika",
+            }
+
+            def is_noise(url: str) -> bool:
+                host = urlparse(url).netloc.lower()
+                return any(nd in host for nd in NOISE_DOMAINS)
+
             page_host = urlparse(page_url).netloc
             api_calls = [
                 r for r in intercepted
-                if not (r["url"] == page_url or r["url"].rstrip("/") == page_url.rstrip("/"))
+                if not is_noise(r["url"])
+                and r["url"].rstrip("/") != page_url.rstrip("/")
             ]
 
+            # логируем все чистые POST для отладки
             if api_calls:
-                best = api_calls[-1]  # последний POST — скорее всего submit
+                log.info("  Чистых POST перехвачено: %s", len(api_calls))
+                for r in api_calls:
+                    log.info("    → %s", r["url"][:120])
+
+            if api_calls:
+                best = api_calls[0]  # первый POST после submit — это форма
                 result["intercepted_url"] = best["url"]
                 result["method"]          = best["method"]
                 result["status"]          = "INTERCEPTED"
-                log.info("  Перехвачен endpoint: %s", best["url"])
+                result["all_endpoints"]   = [r["url"] for r in api_calls]
+                log.info("  Лучший endpoint: %s", best["url"][:120])
             else:
                 result["status"] = "NO_XHR"
-                result["error"]  = "POST-запросы не зафиксированы после submit"
+                result["error"]  = "Нет POST-запросов после submit (кроме аналитики)"
                 log.warning("  Нет XHR после submit на %s", page_url)
 
         except PWTimeout as e:
