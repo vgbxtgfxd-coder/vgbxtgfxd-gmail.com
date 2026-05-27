@@ -150,13 +150,15 @@ class Pipeline:
                     antibot=",".join(set(antibot)),
                 )
 
-                # Extract forms from all page results
+                # Extract forms from all page results (callback only)
                 forms_count = 0
                 for page_result in page_results:
                     forms = self.extractor.extract_forms(page_result, company.id)
                     for form_data in forms:
-                        await self.db.insert_form(form_data)
-                        forms_count += 1
+                        # Only save callback-type forms
+                        if form_data.form_type in ("callback", "popup_callback"):
+                            await self.db.insert_form(form_data)
+                            forms_count += 1
 
                 self._stats["companies_crawled"] += 1
                 self._stats["forms_found"] += forms_count

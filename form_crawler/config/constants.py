@@ -1,28 +1,30 @@
 """Constants: categories, search templates, form triggers, pages to crawl."""
 
-# Business categories for search
+# Business categories for search (medical only)
 CATEGORIES = [
-    "застройщики",
-    "магазины",
-    "мебель",
-    "окна",
-    "ремонт",
-    "автосалоны",
-    "стоматологии",
-    "клиники",
-    "агентства недвижимости",
-    "производство",
-    "услуги",
-    "B2B компании",
+    "стоматология",
+    "клиника",
+    "медицинский центр",
+    "частная клиника",
+    "косметология",
+    "офтальмология",
+    "ортодонтия",
+    "педиатрия",
+    "гинекология",
+    "урология",
+    "неврология",
+    "лор клиника",
+    "реабилитационный центр",
+    "диагностический центр",
+    "лаборатория анализов",
 ]
 
 # Search query templates - {category} will be substituted
 SEARCH_TEMPLATES = [
-    "{category} сайт",
-    "{category} заказать звонок",
-    "{category} оставить заявку",
-    "{category} контакты",
     "{category} обратный звонок",
+    "{category} заказать звонок",
+    "{category} записаться на прием",
+    "{category} сайт",
 ]
 
 # Pages to crawl on each discovered site
