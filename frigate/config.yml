@@ -25,6 +25,7 @@ cameras:
       width: 352
       height: 288
       fps: 4
+      max_disappeared: 50
     motion:
       threshold: 30
       contour_area: 150
