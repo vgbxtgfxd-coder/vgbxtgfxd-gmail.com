@@ -110,7 +110,7 @@ def get_target_endpoint(form: Form) -> Optional[str]:
 
 
 # ── сборка payload ─────────────────────────────────────────────────────────────
-def build_payload(form: Form, phone: str) -> dict:
+def build_payload(form: Form, phone: str, name_val: str = "Тест") -> dict:
     payload = {}
 
     # hidden fields — берём verbatim
@@ -141,7 +141,7 @@ def build_payload(form: Form, phone: str) -> dict:
                 payload[name] = phone
 
         elif purpose == "name":
-            payload[name] = "Тест"
+            payload[name] = name_val
 
         elif purpose == "email":
             payload[name] = "test@example.com"
@@ -185,9 +185,10 @@ async def submit_form(
     form: Form,
     phone: str,
     semaphore: asyncio.Semaphore,
+    name_val: str = "Тест",
 ) -> dict:
     url     = get_target_endpoint(form)
-    payload = build_payload(form, phone)
+    payload = build_payload(form, phone, name_val)
 
     result = {
         "form_id":      form.form_id,
@@ -292,54 +293,217 @@ async def main(csv_path: str, phone: str):
 
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = [
+            submit_form(session, form, phone, semaphore, name_val)
+            for form in targets
+        ]
+        results = await asyncio.gather(*tasks)
+
+
+# ── точка входа ────────────────────────────────────────────────────────────────
+def prompt_config() -> dict:
+    """Интерактивный мастер настройки перед запуском."""
+    SEP = "=" * 55
+
+    print(SEP)
+    print("   FORM SUBMITTER — настройка запуска")
+    print(SEP)
+
+    # CSV файл
+    default_csv = "data/export/forms_export_20260527_110336_forms.csv"
+    csv_input = input(f"\nПуть к CSV [{default_csv}]: ").strip()
+    csv_path = csv_input if csv_input else default_csv
+
+    # Телефон
+    while True:
+        phone = input("Номер телефона для вставки (напр. +79991234567): ").strip()
+        if phone:
+            break
+        print("  → номер обязателен")
+
+    # Имя
+    name_input = input("Имя для поля 'name' [Тест]: ").strip()
+    name_val = name_input if name_input else "Тест"
+
+    # Concurrency
+    conc_input = input("Одновременных запросов [10]: ").strip()
+    try:
+        conc = int(conc_input) if conc_input else 10
+        conc = max(1, min(conc, 50))
+    except ValueError:
+        conc = 10
+
+    # Задержка
+    delay_input = input("Задержка между запросами сек (мин-макс, напр. 0.5-2.0) [0.5-2.0]: ").strip()
+    delay_min, delay_max = 0.5, 2.0
+    if delay_input and "-" in delay_input:
+        try:
+            parts = delay_input.split("-")
+            delay_min = float(parts[0])
+            delay_max = float(parts[1])
+        except ValueError:
+            pass
+
+    # Таймаут
+    timeout_input = input("Таймаут запроса сек [15]: ").strip()
+    try:
+        timeout_val = int(timeout_input) if timeout_input else 15
+    except ValueError:
+        timeout_val = 15
+
+    # Пропускать капчу
+    captcha_input = input("Пропускать формы с капчей? (да/нет) [да]: ").strip().lower()
+    skip_cap = captcha_input not in ("нет", "n", "no", "н")
+
+    # Типы форм
+    print("\nТипы форм: callback, contact, quiz, all")
+    types_input = input("Какие типы отправлять? [all]: ").strip().lower()
+    if types_input and types_input != "all":
+        form_types = {t.strip() for t in types_input.split(",")}
+    else:
+        form_types = None  # все
+
+    print()
+    print(SEP)
+    print("  Конфигурация:")
+    print(f"  CSV:          {csv_path}")
+    print(f"  Телефон:      {phone}")
+    print(f"  Имя:          {name_val}")
+    print(f"  Потоки:       {conc}")
+    print(f"  Задержка:     {delay_min}-{delay_max} сек")
+    print(f"  Таймаут:      {timeout_val} сек")
+    print(f"  Пропуск капч: {'да' if skip_cap else 'нет'}")
+    print(f"  Типы форм:    {', '.join(form_types) if form_types else 'все'}")
+    print(SEP)
+
+    confirm = input("\nЗапустить? (да/нет) [да]: ").strip().lower()
+    if confirm in ("нет", "n", "no", "н"):
+        print("Отмена.")
+        sys.exit(0)
+
+    return {
+        "csv_path":   csv_path,
+        "phone":      phone,
+        "name_val":   name_val,
+        "conc":       conc,
+        "delay_min":  delay_min,
+        "delay_max":  delay_max,
+        "timeout":    timeout_val,
+        "skip_cap":   skip_cap,
+        "form_types": form_types,
+    }
+
+
+async def main(csv_path: str, phone: str, name_val: str = "Тест", form_types: set = None):
+    import time
+    start_time = time.time()
+
+    log.info("Загружаем формы из %s", csv_path)
+    all_forms = load_forms(csv_path)
+    log.info("Всего форм: %s", len(all_forms))
+
+    targets          = []
+    skipped_captcha  = 0
+    skipped_no_phone = 0
+    skipped_method   = 0
+    skipped_type     = 0
+
+    for form in all_forms:
+        if form.method in SKIP_METHODS:
+            skipped_method += 1
+            continue
+        if SKIP_CAPTCHA and form.captcha not in ("none", "", "unknown"):
+            skipped_captcha += 1
+            continue
+        if not has_phone_field(form):
+            skipped_no_phone += 1
+            continue
+        if form_types and form.form_type not in form_types:
+            skipped_type += 1
+            continue
+        targets.append(form)
+
+    log.info(
+        "К отправке: %s  (пропущено: капча=%s, нет_телефона=%s, метод=%s, тип=%s)",
+        len(targets), skipped_captcha, skipped_no_phone, skipped_method, skipped_type,
+    )
+
+    if not targets:
+        log.error("Нет форм для отправки. Выход.")
+        return
+
+    semaphore = asyncio.Semaphore(CONCURRENCY)
+    connector = aiohttp.TCPConnector(ssl=False, limit=CONCURRENCY)
+
+    async with aiohttp.ClientSession(connector=connector) as session:
+        tasks = [
             submit_form(session, form, phone, semaphore)
             for form in targets
         ]
         results = await asyncio.gather(*tasks)
 
-    ok      = sum(1 for r in results if r["status"] == "OK")
-    err     = sum(1 for r in results if r["status"] not in ("OK", "SKIP_NO_URL"))
-    skipped = sum(1 for r in results if r["status"] == "SKIP_NO_URL")
+    elapsed = time.time() - start_time
 
-    log.info("=" * 50)
-    log.info("Готово. OK=%s  ERR=%s  SKIP=%s", ok, err, skipped)
-    log.info("=" * 50)
+    # ── финальная статистика ───────────────────────────────────────────────────
+    ok       = [r for r in results if r["status"] == "OK"]
+    http_err = [r for r in results if r["status"] == "HTTP_ERR"]
+    timeouts = [r for r in results if r["status"] == "TIMEOUT"]
+    conn_err = [r for r in results if r["status"] == "CONN_ERR"]
+    other    = [r for r in results if r["status"] not in ("OK", "HTTP_ERR", "TIMEOUT", "CONN_ERR", "SKIP_NO_URL")]
+    skipped  = [r for r in results if r["status"] == "SKIP_NO_URL"]
+
+    SEP = "=" * 55
+    print()
+    print(SEP)
+    print("  ИТОГИ")
+    print(SEP)
+    print(f"  Всего форм в файле:     {len(all_forms)}")
+    print(f"  Отправлено запросов:    {len(results)}")
+    print(f"  Время выполнения:       {elapsed:.1f} сек")
+    print(f"  Среднее на запрос:      {elapsed/len(results):.2f} сек" if results else "")
+    print()
+    print(f"  ✓ OK (2xx/3xx):         {len(ok)}")
+    print(f"  ✗ HTTP ошибки (4xx/5xx):{len(http_err)}")
+    print(f"  ⏱ Таймауты:             {len(timeouts)}")
+    print(f"  ✗ Ошибки соединения:    {len(conn_err)}")
+    print(f"  ? Прочие ошибки:        {len(other)}")
+    print(f"  — Пропущено (нет URL):  {len(skipped)}")
+    print()
+    print(f"  Пропущено при фильтре:")
+    print(f"    капча:                {skipped_captcha}")
+    print(f"    нет телефона:         {skipped_no_phone}")
+    print(f"    метод GET:            {skipped_method}")
+    if skipped_type:
+        print(f"    тип формы:          {skipped_type}")
+
+    if http_err:
+        print()
+        print("  HTTP ошибки по сайтам:")
+        from collections import Counter
+        from urllib.parse import urlparse
+        domains = Counter(urlparse(r["page_url"]).netloc for r in http_err)
+        for domain, count in domains.most_common():
+            print(f"    {domain}: {count}")
+
+    print(SEP)
 
     out_path = Path("submit_results.json")
     out_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
-    log.info("Результаты → %s", out_path)
+    print(f"\n  Детальные результаты → {out_path}")
+    print()
 
 
-# ── точка входа ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    import argparse
+    cfg = prompt_config()
 
-    parser = argparse.ArgumentParser(description="Form load tester")
-    parser.add_argument(
-        "csv",
-        nargs="?",
-        default="data/export/forms_export_20260527_110336_forms.csv",
-        help="Путь к CSV с формами",
-    )
-    parser.add_argument(
-        "--phone",
-        default=PHONE_NUMBER,
-        help="Номер телефона для вставки (default: +79991234567)",
-    )
-    parser.add_argument(
-        "--concurrency",
-        type=int,
-        default=CONCURRENCY,
-        help="Одновременных запросов",
-    )
-    parser.add_argument(
-        "--no-skip-captcha",
-        action="store_true",
-        help="Не пропускать формы с капчей",
-    )
-    args = parser.parse_args()
+    CONCURRENCY  = cfg["conc"]
+    SKIP_CAPTCHA = cfg["skip_cap"]
+    DELAY_MIN    = cfg["delay_min"]
+    DELAY_MAX    = cfg["delay_max"]
+    TIMEOUT      = cfg["timeout"]
 
-    CONCURRENCY  = args.concurrency
-    SKIP_CAPTCHA = not args.no_skip_captcha
-
-    asyncio.run(main(args.csv, args.phone))
+    asyncio.run(main(
+        csv_path   = cfg["csv_path"],
+        phone      = cfg["phone"],
+        name_val   = cfg["name_val"],
+        form_types = cfg["form_types"],
+    ))
