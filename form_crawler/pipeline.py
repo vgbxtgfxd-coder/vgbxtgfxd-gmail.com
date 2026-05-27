@@ -150,13 +150,20 @@ class Pipeline:
                     antibot=",".join(set(antibot)),
                 )
 
-                # Extract forms from all page results (callback only)
+                # Skip companies with anti-bot protection
+                if antibot:
+                    logger.info(f"  ⊘ {company.site} - skipped (antibot: {','.join(set(antibot))})")
+                    await self.db.update_company(company.id, status="skipped_antibot")
+                    self._stats["companies_crawled"] += 1
+                    return
+
+                # Extract forms from all page results (callback only, no captcha)
                 forms_count = 0
                 for page_result in page_results:
                     forms = self.extractor.extract_forms(page_result, company.id)
                     for form_data in forms:
-                        # Only save callback-type forms
-                        if form_data.form_type in ("callback", "popup_callback"):
+                        # Only save callback-type forms without captcha
+                        if form_data.form_type in ("callback", "popup_callback") and form_data.captcha == "none":
                             await self.db.insert_form(form_data)
                             forms_count += 1
 
