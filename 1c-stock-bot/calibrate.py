@@ -1,12 +1,19 @@
 """
 Утилита калибровки координат UI-элементов 1С (через RDP).
-Версия с таймером — не нужно нажимать Enter.
 
-Работает так:
-1. Запускаешь скрипт
-2. 10 секунд на переключение к RDP с 1С (полноэкранный режим — ОК)
-3. Для каждого элемента 5 секунд — наводишь мышь, ждёшь
-4. Координаты сохраняются автоматически в config.py
+Работает со ЗВУКОВЫМИ СИГНАЛАМИ — можно находиться в полноэкранном RDP:
+
+  1 короткий бип  = "ГОТОВЬСЯ, следующий элемент"
+  Тишина 8 секунд = наводи мышь на нужный элемент
+  2 длинных бипа  = "ЗАХВАЧЕНО, переходим к следующему"
+
+Порядок элементов (запомни перед запуском):
+  1. Поле ДАТЫ НАЧАЛА (левое)
+  2. Поле ДАТЫ КОНЦА (правое)
+  3. ЧЕКБОКС 'Склад' (зелёная галочка)
+  4. ПОЛЕ ВВОДА СКЛАДА (где текст 'склад Томилино')
+  5. КНОПКА 'Сформировать'
+  6. ПОЛЕ 'Номенклатура труб'
 
 Использование:
     python calibrate.py
@@ -22,79 +29,82 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import pygetwindow as gw
+    import winsound
+    HAS_SOUND = True
 except ImportError:
-    gw = None
+    HAS_SOUND = False
 
 
-def countdown(seconds: int, label: str):
-    """Обратный отсчёт с выводом в одну строку"""
-    for i in range(seconds, 0, -1):
-        print(f"\r    [{label}] Наведи мышь → захват через {i} сек...", end="", flush=True)
-        time.sleep(1)
-    print(f"\r    [{label}] Захват!                                    ", flush=True)
+def beep_ready():
+    """1 короткий бип = ГОТОВЬСЯ, наводи мышь"""
+    if HAS_SOUND:
+        winsound.Beep(800, 300)
 
 
-def beep():
-    """Звуковой сигнал при захвате (Windows)"""
-    try:
-        import winsound
-        winsound.Beep(1000, 200)
-    except Exception:
-        pass
+def beep_captured():
+    """2 длинных бипа = ЗАХВАЧЕНО"""
+    if HAS_SOUND:
+        winsound.Beep(1200, 400)
+        time.sleep(0.1)
+        winsound.Beep(1200, 400)
 
 
-def find_rdp_window():
-    """Показывает найденное RDP-окно для проверки"""
-    if gw is None:
-        return None
-    all_windows = gw.getAllWindows()
-    for win in all_windows:
-        title = win.title.lower()
-        if any(kw in title for kw in ["удалённый рабочий стол", "удаленный рабочий стол", "remote desktop"]):
-            return win
-    for win in all_windows:
-        if "РГК" in win.title or "ИПК" in win.title:
-            return win
-    return None
+def beep_start():
+    """3 быстрых бипа = СТАРТ калибровки (пошёл первый элемент)"""
+    if HAS_SOUND:
+        for _ in range(3):
+            winsound.Beep(600, 150)
+            time.sleep(0.1)
+
+
+def beep_done():
+    """Мелодия = ВСЁ ГОТОВО"""
+    if HAS_SOUND:
+        for freq in [800, 1000, 1200, 1500]:
+            winsound.Beep(freq, 200)
+            time.sleep(0.05)
 
 
 def main():
     print("=" * 60)
     print("  КАЛИБРОВКА UI-ЭЛЕМЕНТОВ 1С (через RDP)")
-    print("  Отчёт: ОСВ по номенклатуре и заказам")
     print("=" * 60)
     print()
-
-    # Проверяем RDP-окно
-    rdp = find_rdp_window()
-    if rdp:
-        print(f"  RDP-окно найдено: '{rdp.title}'")
-    else:
-        print("  ⚠ RDP-окно не найдено автоматически — это ОК,")
-        print("    просто переключись на RDP вручную.")
+    print("  Работает через ЗВУКОВЫЕ СИГНАЛЫ:")
+    print("    1 бип        = ГОТОВЬСЯ (наводи мышь)")
+    print("    8 сек тишина = время навести мышь")
+    print("    2 бипа       = ЗАХВАЧЕНО")
+    print()
+    print("  Порядок элементов:")
+    print("    1. Поле ДАТЫ НАЧАЛА (левое)")
+    print("    2. Поле ДАТЫ КОНЦА (правое)")
+    print("    3. ЧЕКБОКС 'Склад' (зелёная галочка)")
+    print("    4. ПОЛЕ ВВОДА СКЛАДА (текст 'склад Томилино')")
+    print("    5. КНОПКА 'Сформировать'")
+    print("    6. ПОЛЕ 'Номенклатура труб'")
+    print()
+    print("  Запомнил порядок? Жми Enter когда готов.")
+    input("  >>> ")
+    print()
+    print("  Переключайся на RDP! Через 15 секунд начнётся.")
+    print("  (3 быстрых бипа = СТАРТ)")
     print()
 
-    print("Как работает:")
-    print("  1. Переключись на RDP с открытой 1С")
-    print("  2. Для каждого элемента — 5 секунд наводишь мышь")
-    print("  3. Звуковой сигнал = координаты захвачены")
-    print("  4. config.py обновится автоматически")
-    print()
-
-    # Начальная пауза
-    print(">>> СТАРТ через 10 секунд — переключись на RDP с 1С! <<<")
-    for i in range(10, 0, -1):
-        print(f"\r    Начало через {i} сек...  ", end="", flush=True)
+    # Обратный отсчёт 15 секунд перед стартом
+    for i in range(15, 0, -1):
+        print(f"\r  Старт через {i:2d} сек...  ", end="", flush=True)
         time.sleep(1)
-    print("\r    ПОЕХАЛИ!                      ")
-    print()
+    print("\r  СТАРТ!                    ")
+
+    # Сигнал старта
+    beep_start()
+    time.sleep(1)
 
     targets = [
-        ("date_start", "Поле ДАТЫ НАЧАЛА (где написано '27.05.2026' слева)"),
-        ("date_end", "Поле ДАТЫ КОНЦА (правая дата)"),
-        ("warehouse_checkbox", "ЧЕКБОКС 'Склад' (зелёная галочка)"),
-        ("warehouse_field", "ПОЛЕ ВВОДА СКЛАДА (текст 'склад Томилино')"),
+        ("date_start", "Поле ДАТЫ НАЧАЛА"),
+        ("date_end", "Поле ДАТЫ КОНЦА"),
+        ("warehouse_checkbox", "ЧЕКБОКС 'Склад'"),
+        ("warehouse_field", "ПОЛЕ ВВОДА СКЛАДА"),
         ("btn_generate", "КНОПКА 'Сформировать'"),
         ("nomenclature_field", "ПОЛЕ 'Номенклатура труб'"),
     ]
@@ -102,18 +112,26 @@ def main():
     results = {}
 
     for i, (key, label) in enumerate(targets, 1):
-        print(f"  [{i}/{len(targets)}] {label}")
-        countdown(5, key)
+        # Сигнал "готовься" — 1 бип
+        beep_ready()
 
+        # 8 секунд на наведение мыши
+        time.sleep(8)
+
+        # Захват координат
         pos = pyautogui.position()
         results[key] = {"x": pos.x, "y": pos.y}
-        beep()
-        print(f"    ✓ Сохранено: x={pos.x}, y={pos.y}")
-        print()
 
-        # Пауза между элементами
-        if i < len(targets):
-            time.sleep(2)
+        # Сигнал "захвачено" — 2 бипа
+        beep_captured()
+
+        print(f"  [{i}/6] {label}: x={pos.x}, y={pos.y} ✓")
+
+        # Пауза 3 секунды перед следующим
+        time.sleep(3)
+
+    # Финальный сигнал
+    beep_done()
 
     # Вывод результата
     print()
@@ -133,8 +151,6 @@ def main():
             f.write(f'    "{key}": {{"x": {coords["x"]}, "y": {coords["y"]}}},\n')
         f.write("}\n")
 
-    print(f"\nРезультат сохранён в calibration_result.txt")
-
     # Автоматическое обновление config.py
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.py")
     if os.path.exists(config_path):
@@ -145,7 +161,6 @@ def main():
             start_marker = "UI_ELEMENTS = {"
             start_idx = config_content.find(start_marker)
             if start_idx != -1:
-                # Находим конец блока
                 search_from = start_idx + len(start_marker)
                 brace_count = 1
                 end_idx = search_from
@@ -156,7 +171,6 @@ def main():
                         brace_count -= 1
                     end_idx += 1
 
-                # Новый блок
                 new_block = "UI_ELEMENTS = {\n"
                 for key, coords in results.items():
                     new_block += f'    "{key}": {{"x": {coords["x"]}, "y": {coords["y"]}}},\n'
@@ -167,12 +181,12 @@ def main():
                 with open(config_path, "w", encoding="utf-8") as f:
                     f.write(new_config)
 
-                print("✓ config.py обновлён автоматически!")
+                print("\n✓ config.py обновлён автоматически!")
             else:
-                print("⚠ Не нашёл UI_ELEMENTS в config.py — обнови вручную")
+                print("\n⚠ Не нашёл UI_ELEMENTS в config.py — обнови вручную")
 
         except Exception as e:
-            print(f"⚠ Ошибка обновления config.py: {e}")
+            print(f"\n⚠ Ошибка: {e}")
 
     print("\nГотово! Перезапусти бота: python bot.py")
 
