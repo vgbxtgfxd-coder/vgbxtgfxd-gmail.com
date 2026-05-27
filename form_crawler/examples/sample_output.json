@@ -1,0 +1,182 @@
+{
+  "exported_at": "2026-05-26T12:00:00",
+  "total_companies": 3,
+  "total_forms": 5,
+  "companies": [
+    {
+      "id": 1,
+      "name": "СтройДом - Застройщик в Москве",
+      "site": "https://stroiDom-msk.ru",
+      "category": "застройщики",
+      "city": "Москва",
+      "cms": "bitrix",
+      "libraries": ["jquery", "bitrix_ajax", "recaptcha"],
+      "antibot": "",
+      "status": "crawled",
+      "forms": [
+        {
+          "id": 1,
+          "company_id": 1,
+          "page_url": "https://stroiDom-msk.ru/",
+          "form_type": "callback",
+          "html": "<form id=\"callback-form\" action=\"/ajax/callback.php\" method=\"POST\"><input type=\"hidden\" name=\"sessid\" value=\"abc123\"/><input type=\"text\" name=\"name\" placeholder=\"Ваше имя\" required/><input type=\"tel\" name=\"phone\" placeholder=\"+7 (___) ___-__-__\" required/><button type=\"submit\">Заказать звонок</button></form>",
+          "action": "https://stroiDom-msk.ru/ajax/callback.php",
+          "method": "POST",
+          "submit_type": "ajax",
+          "endpoint": "/ajax/callback.php",
+          "fields": [
+            {"tag": "input", "name": "name", "type": "text", "placeholder": "Ваше имя", "required": true, "purpose": "name"},
+            {"tag": "input", "name": "phone", "type": "tel", "placeholder": "+7 (___) ___-__-__", "required": true, "purpose": "phone"}
+          ],
+          "hidden_fields": [
+            {"tag": "input", "name": "sessid", "type": "hidden", "value": "abc123", "purpose": "hidden"}
+          ],
+          "csrf_token": "abc123",
+          "captcha": "none",
+          "selectors": {
+            "form": "#callback-form",
+            "submit_btn": "button",
+            "inputs": ["input[name=\"name\"]", "input[name=\"phone\"]"]
+          },
+          "xpath": "//*[@id=\"callback-form\"]",
+          "js_events": [
+            {"event": "submit", "handler": "BX.ajax.post('/ajax/callback.php', ...)", "source": "bitrix_ajax"}
+          ],
+          "iframe_src": "",
+          "shadow_dom": false,
+          "is_modal": true,
+          "trigger_selector": "a.callback-btn"
+        },
+        {
+          "id": 2,
+          "company_id": 1,
+          "page_url": "https://stroiDom-msk.ru/contacts",
+          "form_type": "contact",
+          "html": "<form action=\"/local/ajax/feedback.php\" method=\"POST\">...</form>",
+          "action": "https://stroiDom-msk.ru/local/ajax/feedback.php",
+          "method": "POST",
+          "submit_type": "ajax",
+          "endpoint": "/local/ajax/feedback.php",
+          "fields": [
+            {"tag": "input", "name": "name", "type": "text", "purpose": "name"},
+            {"tag": "input", "name": "phone", "type": "tel", "purpose": "phone"},
+            {"tag": "input", "name": "email", "type": "email", "purpose": "email"},
+            {"tag": "textarea", "name": "message", "type": "textarea", "purpose": "comment"}
+          ],
+          "hidden_fields": [],
+          "csrf_token": "",
+          "captcha": "recaptcha_v3",
+          "selectors": {"form": "form.feedback-form", "submit_btn": "button.btn-submit", "inputs": []},
+          "xpath": "//form[contains(@class,'feedback-form')]",
+          "js_events": [],
+          "iframe_src": "",
+          "shadow_dom": false,
+          "is_modal": false,
+          "trigger_selector": ""
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "МебельМаркет - интернет-магазин мебели",
+      "site": "https://mebel-market.ru",
+      "category": "мебель",
+      "city": "Москва",
+      "cms": "wordpress",
+      "libraries": ["jquery", "wpcf7", "fetch_api"],
+      "antibot": "cloudflare",
+      "status": "crawled",
+      "forms": [
+        {
+          "id": 3,
+          "company_id": 2,
+          "page_url": "https://mebel-market.ru/",
+          "form_type": "consultation",
+          "html": "<div class=\"wpcf7\"><form action=\"/wp-json/contact-form-7/v1/contact-forms/42/feedback\" method=\"POST\">...</form></div>",
+          "action": "/wp-json/contact-form-7/v1/contact-forms/42/feedback",
+          "method": "POST",
+          "submit_type": "ajax",
+          "endpoint": "/wp-json/contact-form-7/v1/contact-forms/42/feedback",
+          "fields": [
+            {"tag": "input", "name": "your-name", "type": "text", "purpose": "name"},
+            {"tag": "input", "name": "your-tel", "type": "tel", "purpose": "phone"}
+          ],
+          "hidden_fields": [
+            {"tag": "input", "name": "_wpcf7_nonce", "type": "hidden", "value": "nonce_val", "purpose": "hidden"}
+          ],
+          "csrf_token": "nonce_val",
+          "captcha": "none",
+          "selectors": {"form": ".wpcf7 form", "submit_btn": "input.wpcf7-submit", "inputs": []},
+          "xpath": "//div[@class='wpcf7']//form",
+          "js_events": [{"event": "submit", "handler": "wpcf7.submit()", "source": "wpcf7"}],
+          "iframe_src": "",
+          "shadow_dom": false,
+          "is_modal": false,
+          "trigger_selector": ""
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Стоматология Улыбка",
+      "site": "https://smile-clinic.ru",
+      "category": "стоматологии",
+      "city": "Москва",
+      "cms": "tilda",
+      "libraries": ["jquery", "fetch_api"],
+      "antibot": "",
+      "status": "crawled",
+      "forms": [
+        {
+          "id": 4,
+          "company_id": 3,
+          "page_url": "https://smile-clinic.ru/",
+          "form_type": "callback",
+          "html": "<form class=\"t-form\" action=\"https://forms.tildacdn.com/procces/\" method=\"POST\">...</form>",
+          "action": "https://forms.tildacdn.com/procces/",
+          "method": "POST",
+          "submit_type": "ajax",
+          "endpoint": "https://forms.tildacdn.com/procces/",
+          "fields": [
+            {"tag": "input", "name": "Name", "type": "text", "purpose": "name"},
+            {"tag": "input", "name": "Phone", "type": "tel", "purpose": "phone"}
+          ],
+          "hidden_fields": [
+            {"tag": "input", "name": "formservices[]", "type": "hidden", "value": "email", "purpose": "hidden"}
+          ],
+          "csrf_token": "",
+          "captcha": "none",
+          "selectors": {"form": "form.t-form", "submit_btn": "button.t-submit", "inputs": []},
+          "xpath": "//form[contains(@class,'t-form')]",
+          "js_events": [],
+          "iframe_src": "",
+          "shadow_dom": false,
+          "is_modal": true,
+          "trigger_selector": "div.t396__elem > a"
+        },
+        {
+          "id": 5,
+          "company_id": 3,
+          "page_url": "https://smile-clinic.ru/",
+          "form_type": "quiz",
+          "html": "",
+          "action": "",
+          "method": "",
+          "submit_type": "",
+          "endpoint": "",
+          "fields": [],
+          "hidden_fields": [],
+          "csrf_token": "",
+          "captcha": "none",
+          "selectors": {"iframe": "iframe[src*='marquiz']"},
+          "xpath": "",
+          "js_events": [],
+          "iframe_src": "https://quiz.marquiz.ru/quiz/abc123",
+          "shadow_dom": false,
+          "is_modal": false,
+          "trigger_selector": ""
+        }
+      ]
+    }
+  ]
+}
