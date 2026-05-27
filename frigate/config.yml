@@ -19,7 +19,7 @@ cameras:
             - detect
             - record
       output_args:
-        record: -f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c:v copy -an
+        record: -f segment -segment_time 5 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c:v copy -an
     detect:
       enabled: true
       width: 352
@@ -48,12 +48,12 @@ cameras:
       alerts:
         retain:
           days: 1
-        pre_capture: 13
+        pre_capture: 20
         post_capture: 15
       detections:
         retain:
           days: 1
-        pre_capture: 13
+        pre_capture: 20
         post_capture: 15
     snapshots:
       enabled: true
