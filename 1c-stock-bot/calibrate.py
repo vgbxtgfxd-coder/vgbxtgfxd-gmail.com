@@ -1,9 +1,12 @@
 """
-Утилита калибровки координат UI-элементов 1С.
+Утилита калибровки координат UI-элементов 1С (через RDP).
 Версия с таймером — не нужно нажимать Enter.
 
-Запускай на рабочем ПК при открытом окне 1С с отчётом.
-Наводи мышь на элемент → ждёшь 5 секунд → координаты сохраняются.
+Работает так:
+1. Запускаешь скрипт
+2. 10 секунд на переключение к RDP с 1С (полноэкранный режим — ОК)
+3. Для каждого элемента 5 секунд — наводишь мышь, ждёшь
+4. Координаты сохраняются автоматически в config.py
 
 Использование:
     python calibrate.py
@@ -17,6 +20,11 @@ try:
 except ImportError:
     print("Установи pyautogui: pip install pyautogui")
     sys.exit(1)
+
+try:
+    import pygetwindow as gw
+except ImportError:
+    gw = None
 
 
 def countdown(seconds: int, label: str):
@@ -36,23 +44,46 @@ def beep():
         pass
 
 
+def find_rdp_window():
+    """Показывает найденное RDP-окно для проверки"""
+    if gw is None:
+        return None
+    all_windows = gw.getAllWindows()
+    for win in all_windows:
+        title = win.title.lower()
+        if any(kw in title for kw in ["удалённый рабочий стол", "удаленный рабочий стол", "remote desktop"]):
+            return win
+    for win in all_windows:
+        if "РГК" in win.title or "ИПК" in win.title:
+            return win
+    return None
+
+
 def main():
     print("=" * 60)
-    print("  КАЛИБРОВКА UI-ЭЛЕМЕНТОВ 1С (режим таймера)")
+    print("  КАЛИБРОВКА UI-ЭЛЕМЕНТОВ 1С (через RDP)")
     print("  Отчёт: ОСВ по номенклатуре и заказам")
     print("=" * 60)
     print()
-    print("Как работает:")
-    print("  1. Для каждого элемента у тебя 5 секунд")
-    print("  2. Наведи мышь на нужный элемент в 1С")
-    print("  3. Когда таймер дойдёт до 0 — координаты запомнятся")
-    print("  4. Прозвучит сигнал — можно переходить к следующему")
-    print()
-    print("Переключись на RDP с 1С (полный экран — ОК)")
+
+    # Проверяем RDP-окно
+    rdp = find_rdp_window()
+    if rdp:
+        print(f"  RDP-окно найдено: '{rdp.title}'")
+    else:
+        print("  ⚠ RDP-окно не найдено автоматически — это ОК,")
+        print("    просто переключись на RDP вручную.")
     print()
 
-    # Начальная пауза чтобы переключиться на RDP
-    print(">>> СТАРТ через 10 секунд — переключись на 1С! <<<")
+    print("Как работает:")
+    print("  1. Переключись на RDP с открытой 1С")
+    print("  2. Для каждого элемента — 5 секунд наводишь мышь")
+    print("  3. Звуковой сигнал = координаты захвачены")
+    print("  4. config.py обновится автоматически")
+    print()
+
+    # Начальная пауза
+    print(">>> СТАРТ через 10 секунд — переключись на RDP с 1С! <<<")
     for i in range(10, 0, -1):
         print(f"\r    Начало через {i} сек...  ", end="", flush=True)
         time.sleep(1)
@@ -60,12 +91,12 @@ def main():
     print()
 
     targets = [
-        ("date_start", "Поле ДАТЫ НАЧАЛА (левое поле с датой, например 27.05.2026)"),
-        ("date_end", "Поле ДАТЫ КОНЦА (правое поле с датой)"),
-        ("warehouse_checkbox", "ЧЕКБОКС 'Склад' (зелёная галочка слева от поля склада)"),
-        ("warehouse_field", "ПОЛЕ ВВОДА СКЛАДА (текстовое поле, где написано 'склад Томилино')"),
-        ("btn_generate", "КНОПКА 'Сформировать' (зелёная кнопка)"),
-        ("nomenclature_field", "ПОЛЕ 'Номенклатура труб' (текстовое поле фильтра)"),
+        ("date_start", "Поле ДАТЫ НАЧАЛА (где написано '27.05.2026' слева)"),
+        ("date_end", "Поле ДАТЫ КОНЦА (правая дата)"),
+        ("warehouse_checkbox", "ЧЕКБОКС 'Склад' (зелёная галочка)"),
+        ("warehouse_field", "ПОЛЕ ВВОДА СКЛАДА (текст 'склад Томилино')"),
+        ("btn_generate", "КНОПКА 'Сформировать'"),
+        ("nomenclature_field", "ПОЛЕ 'Номенклатура труб'"),
     ]
 
     results = {}
@@ -80,7 +111,7 @@ def main():
         print(f"    ✓ Сохранено: x={pos.x}, y={pos.y}")
         print()
 
-        # Пауза 2 секунды между элементами чтобы перевести мышь
+        # Пауза между элементами
         if i < len(targets):
             time.sleep(2)
 
@@ -103,23 +134,18 @@ def main():
         f.write("}\n")
 
     print(f"\nРезультат сохранён в calibration_result.txt")
-    print("Скопируй значения в config.py (замени блок UI_ELEMENTS)")
-    print()
 
     # Автоматическое обновление config.py
-    config_path = os.path.join(os.path.dirname(__file__), "config.py")
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.py")
     if os.path.exists(config_path):
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 config_content = f.read()
 
-            # Ищем блок UI_ELEMENTS и заменяем
             start_marker = "UI_ELEMENTS = {"
-            end_marker = "}"
-
             start_idx = config_content.find(start_marker)
             if start_idx != -1:
-                # Находим закрывающую скобку блока
+                # Находим конец блока
                 search_from = start_idx + len(start_marker)
                 brace_count = 1
                 end_idx = search_from
@@ -130,13 +156,12 @@ def main():
                         brace_count -= 1
                     end_idx += 1
 
-                # Формируем новый блок
+                # Новый блок
                 new_block = "UI_ELEMENTS = {\n"
                 for key, coords in results.items():
                     new_block += f'    "{key}": {{"x": {coords["x"]}, "y": {coords["y"]}}},\n'
                 new_block += "}"
 
-                # Заменяем
                 new_config = config_content[:start_idx] + new_block + config_content[end_idx:]
 
                 with open(config_path, "w", encoding="utf-8") as f:
@@ -144,13 +169,12 @@ def main():
 
                 print("✓ config.py обновлён автоматически!")
             else:
-                print("⚠ Не удалось найти UI_ELEMENTS в config.py — обнови вручную")
+                print("⚠ Не нашёл UI_ELEMENTS в config.py — обнови вручную")
 
         except Exception as e:
             print(f"⚠ Ошибка обновления config.py: {e}")
-            print("  Обнови вручную из calibration_result.txt")
 
-    print("\nГотово! Можно запускать бота: python bot.py")
+    print("\nГотово! Перезапусти бота: python bot.py")
 
 
 if __name__ == "__main__":
