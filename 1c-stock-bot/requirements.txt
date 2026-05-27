@@ -1,0 +1,7 @@
+aiogram==3.13.1
+python-dotenv==1.0.1
+pyautogui==0.9.54
+pyperclip==1.9.0
+pygetwindow==0.0.9
+openpyxl==3.1.5
+Pillow==10.4.0
