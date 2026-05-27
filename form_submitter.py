@@ -18,6 +18,29 @@ from urllib.parse import urlparse, urljoin
 
 import aiohttp
 
+# ── подтверждённые рабочие endpoints (перехвачены через Playwright) ────────────
+# формат: список словарей с url, method, content_type и payload_builder
+DIRECT_ENDPOINTS = [
+    {
+        "label":        "ndv.ru — OrderCallForm",
+        "url":          "https://www.ndv.ru/backend-api/realty/forms/OrderCallForm",
+        "method":       "POST",
+        "content_type": "application/x-www-form-urlencoded",
+        "referer":      "https://ndv.ru/services",
+        "origin":       "https://www.ndv.ru",
+        "payload":      lambda phone, name: {"phone": phone, "name": name},
+    },
+    {
+        "label":        "eyenewton.ru — callback (uzhedoma.ru)",
+        "url":          "https://eyenewton.ru/callback/request/create",
+        "method":       "POST",
+        "content_type": "application/x-www-form-urlencoded",
+        "referer":      "https://msk.uzhedoma.ru/contacts",
+        "origin":       "https://msk.uzhedoma.ru",
+        "payload":      lambda phone, name: {"phone": phone, "name": name},
+    },
+]
+
 # ── настройки ──────────────────────────────────────────────────────────────────
 PHONE_NUMBER = "+79991234567"   # номер который вставляем
 CONCURRENCY  = 10               # одновременных запросов
@@ -256,6 +279,55 @@ async def submit_form(
     return result
 
 
+async def submit_direct_endpoints(
+    session: aiohttp.ClientSession,
+    phone: str,
+    name_val: str,
+    semaphore: asyncio.Semaphore,
+) -> list:
+    """Отправка на подтверждённые endpoints напрямую без CSV."""
+    results = []
+    for ep in DIRECT_ENDPOINTS:
+        async with semaphore:
+            await asyncio.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
+            result = {
+                "label":    ep["label"],
+                "url":      ep["url"],
+                "status":   None,
+                "http_code": None,
+                "error":    None,
+                "response": None,
+            }
+            try:
+                payload  = ep["payload"](phone, name_val)
+                headers  = {
+                    "User-Agent":   USER_AGENT,
+                    "Referer":      ep.get("referer", ""),
+                    "Origin":       ep.get("origin", ""),
+                    "Content-Type": ep.get("content_type", "application/x-www-form-urlencoded"),
+                }
+                timeout  = aiohttp.ClientTimeout(total=TIMEOUT)
+                async with session.post(
+                    ep["url"],
+                    data=payload if "urlencoded" in ep.get("content_type","") else None,
+                    json=payload if "json" in ep.get("content_type","") else None,
+                    headers=headers,
+                    timeout=timeout,
+                    ssl=False,
+                ) as resp:
+                    body = await resp.text(errors="replace")
+                    result["http_code"] = resp.status
+                    result["response"]  = body[:300]
+                    result["status"]    = "OK" if resp.status < 400 else "HTTP_ERR"
+                    log.info("[DIRECT] %s → %s | %s", ep["label"], resp.status, body[:80])
+            except Exception as e:
+                result["status"] = "ERROR"
+                result["error"]  = str(e)
+                log.error("[DIRECT] %s ошибка: %s", ep["label"], e)
+            results.append(result)
+    return results
+
+
 # ── главный цикл ───────────────────────────────────────────────────────────────
 async def main(csv_path: str, phone: str):
     log.info("Загружаем формы из %s", csv_path)
@@ -439,7 +511,15 @@ async def main(csv_path: str, phone: str, name_val: str = "Тест", form_types
             submit_form(session, form, phone, semaphore)
             for form in targets
         ]
-        results = await asyncio.gather(*tasks)
+        # добавляем прямые endpoints
+        direct_task = submit_direct_endpoints(session, phone, name_val, semaphore)
+        csv_results    = await asyncio.gather(*tasks)
+        direct_results = await direct_task
+
+    results = list(csv_results) + [
+        {**r, "form_id": f"direct_{i}", "page_url": r["url"], "form_type": "direct"}
+        for i, r in enumerate(direct_results)
+    ]
 
     elapsed = time.time() - start_time
 
@@ -483,6 +563,13 @@ async def main(csv_path: str, phone: str, name_val: str = "Тест", form_types
         domains = Counter(urlparse(r["page_url"]).netloc for r in http_err)
         for domain, count in domains.most_common():
             print(f"    {domain}: {count}")
+
+    if direct_results:
+        print()
+        print("  Прямые endpoints (подтверждённые):")
+        for r in direct_results:
+            icon = "✓" if r["status"] == "OK" else "✗"
+            print(f"    {icon} {r['label'][:45]:45} → {r['http_code']} | {(r.get('response') or '')[:60]}")
 
     print(SEP)
 
