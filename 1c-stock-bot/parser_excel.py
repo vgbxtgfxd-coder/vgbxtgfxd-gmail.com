@@ -28,14 +28,52 @@ P (16) - Конечный остаток (м)
 import logging
 from pathlib import Path
 
-from openpyxl import load_workbook
-
 logger = logging.getLogger(__name__)
+
+
+def open_workbook(file_path: str):
+    """
+    Открывает Excel-файл (.xlsx или .xls) и возвращает список строк.
+    Каждая строка — список значений ячеек.
+    """
+    path = Path(file_path)
+    suffix = path.suffix.lower()
+
+    if suffix == ".xlsx":
+        from openpyxl import load_workbook
+        wb = load_workbook(file_path, read_only=True, data_only=True)
+        ws = wb.active
+        rows = []
+        for row in ws.iter_rows(values_only=True):
+            rows.append(list(row))
+        wb.close()
+        return rows
+
+    elif suffix == ".xls":
+        import xlrd
+        wb = xlrd.open_workbook(file_path)
+        ws = wb.sheet_by_index(0)
+        rows = []
+        for row_idx in range(ws.nrows):
+            row_values = []
+            for col_idx in range(ws.ncols):
+                cell = ws.cell(row_idx, col_idx)
+                val = cell.value
+                # xlrd возвращает пустые строки для пустых ячеек
+                if val == "":
+                    val = None
+                row_values.append(val)
+            rows.append(row_values)
+        return rows
+
+    else:
+        raise ValueError(f"Неподдерживаемый формат: {suffix}")
 
 
 def parse_stock_report(file_path: str) -> list[dict]:
     """
     Парсит Excel-файл отчёта ОСВ по номенклатуре и заказам.
+    Поддерживает .xls и .xlsx.
 
     Returns:
         Список словарей с данными по каждой номенклатурной позиции (группы верхнего уровня).
@@ -46,23 +84,22 @@ def parse_stock_report(file_path: str) -> list[dict]:
         return []
 
     try:
-        wb = load_workbook(file_path, read_only=True, data_only=True)
-        ws = wb.active
+        rows = open_workbook(file_path)
 
         stock_items = []
         current_group = None
 
         # Определяем начало данных (ищем строку после заголовков)
-        data_start_row = find_data_start(ws)
+        data_start_row = find_data_start(rows)
         if data_start_row is None:
             logger.warning("Не удалось определить начало данных")
             data_start_row = 9  # значение по умолчанию из скриншота
 
         logger.info(f"Начало данных: строка {data_start_row}")
 
-        for row in ws.iter_rows(min_row=data_start_row, values_only=False):
-            # Получаем значения ячеек
-            cells = [cell.value for cell in row[:16]]  # A-P (16 колонок)
+        for row in rows[data_start_row - 1:]:  # rows 0-indexed, data_start_row 1-indexed
+            # Получаем значения ячеек (до 16 колонок)
+            cells = row[:16] if len(row) >= 16 else row + [None] * (16 - len(row))
 
             # Пропускаем полностью пустые строки
             if all(c is None for c in cells):
@@ -127,7 +164,6 @@ def parse_stock_report(file_path: str) -> list[dict]:
                 stock_items.append(item)
                 current_group = name
 
-        wb.close()
         logger.info(f"Распарсено позиций: {len(stock_items)}")
         return stock_items
 
@@ -136,19 +172,16 @@ def parse_stock_report(file_path: str) -> list[dict]:
         return []
 
 
-def find_data_start(ws) -> int | None:
-    """Ищет строку начала данных (после заголовков)"""
-    for row_num, row in enumerate(ws.iter_rows(min_row=1, max_row=20, values_only=True), start=1):
-        # Ищем строку с "Заказ клиента" — это последняя строка заголовков
+def find_data_start(rows: list) -> int | None:
+    """Ищет строку начала данных (после заголовков). Возвращает 1-indexed номер строки."""
+    for row_num, row in enumerate(rows[:20], start=1):
         for cell in row:
             if cell and "Заказ клиента" in str(cell):
                 return row_num + 1
 
-    # Альтернатива: ищем "Номенклатура труб" в заголовке
-    for row_num, row in enumerate(ws.iter_rows(min_row=1, max_row=20, values_only=True), start=1):
+    for row_num, row in enumerate(rows[:20], start=1):
         for cell in row:
             if cell and "Номенклатура труб" in str(cell):
-                # Данные начинаются через 3-4 строки после этого заголовка
                 return row_num + 4
 
     return None
@@ -177,22 +210,19 @@ def format_number(value: float | None) -> str:
 def parse_stock_report_detailed(file_path: str) -> list[dict]:
     """
     Расширенный парсинг — включает детализацию по складам и заказам.
-    Возвращает полную иерархию.
     """
     path = Path(file_path)
     if not path.exists():
         return []
 
     try:
-        wb = load_workbook(file_path, read_only=True, data_only=True)
-        ws = wb.active
-
+        rows = open_workbook(file_path)
         items = []
         current_group = None
-        data_start_row = find_data_start(ws) or 9
+        data_start_row = find_data_start(rows) or 9
 
-        for row in ws.iter_rows(min_row=data_start_row, values_only=False):
-            cells = [cell.value for cell in row[:16]]
+        for row in rows[data_start_row - 1:]:
+            cells = row[:16] if len(row) >= 16 else row + [None] * (16 - len(row))
 
             if all(c is None for c in cells):
                 continue
@@ -224,7 +254,6 @@ def parse_stock_report_detailed(file_path: str) -> list[dict]:
 
             items.append(item)
 
-        wb.close()
         return items
 
     except Exception as e:
