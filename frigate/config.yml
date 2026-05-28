@@ -22,8 +22,8 @@ cameras:
         record: -f segment -segment_time 5 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c:v copy -an
     detect:
       enabled: true
-      width: 352
-      height: 288
+      width: 640
+      height: 480
       fps: 4
       max_disappeared: 50
     motion:
